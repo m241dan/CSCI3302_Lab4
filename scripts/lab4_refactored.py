@@ -1,9 +1,10 @@
 #!/usr/bin/python
+from matplotlib import animation
 
 import rospy
 import json
 import numpy as np
-import matplotlib as plt
+import matplotlib.pyplot as plt
 
 from geometry_msgs.msg import Pose2D
 from std_msgs.msg import Float32MultiArray, Empty, String, Int16
@@ -18,12 +19,33 @@ class SparkiMap(object):
         self.cell_size_y = cell_size_y
         self.world_grid = np.zeros(shape=(int(M / cell_size_x), int(N / cell_size_y), 3))
 
+        self.fig = plt.figure()
+        self.img = plt.imshow(self.world_grid, interpolation='nearest')
+        self.sparki_x = 0.0
+        self.sparki_y = 0.0
+
+        ani = animation.FuncAnimation(self.fig, self.update_fig, interval=50, blit=True)
+        plt.draw()
+
+        plt.show()
+
+
+
     def update_position(self, x, y):
-        # for j in range(int(self.N/self.cell_size_y)):
-        #     for i in range(int(M/self.cell_size_x)):
-        #         if self.world_grid[i, j] == [0, 0, 0] or self.world_grid[i, j] == [255, 0, 0]:
-        #             if floor(x * 100) == i and floor(y * 100)
-        pass
+        self.sparki_x = x
+        self.sparki_y = y
+
+    def update_fig(self, dummy):
+        for j in range(int(self.N / self.cell_size_y)):
+            for i in range(int(self.M / self.cell_size_x)):
+                if ((self.world_grid[i, j] == [0, 0, 0]).all() or (self.world_grid[i, j] == [255, 0, 0]).all()):
+                    if (floor(self.sparki_x) == i and floor(self.sparki_y) == j):
+                        self.world_grid[i, j] = [255, 0, 0]
+                    else:
+                        self.world_grid[i, j] = [0, 0, 0]
+        self.img.set_data(self.world_grid)
+        plt.pause(0.00001)
+        return [self.img]
 
     def show_map(self):
         plt.imshow(self.world_grid, interpolation='nearest')
@@ -61,6 +83,7 @@ class SparkiController(object):
         :return:
         """
         self.present_pose = msg
+        self.map.update_position(x=msg.x, y=msg.y)
 
     def update_state_cb(self, msg):
         """
@@ -81,15 +104,14 @@ class SparkiController(object):
         if ir[3] < self.IR_THRESHOLD:
             motor_com.data = [0.25, -0.25]
 
-            # if ( (lineCenter < threshold) && (lineLeft > threshold) && (lineRight > threshold) )
         if ir[2] < self.IR_THRESHOLD < ir[1] and ir[3] > self.IR_THRESHOLD:
             motor_com.data = [0.25, 0.25]
 
         self.motor_pub.publish(motor_com)
 
     def us_to_robot(self, x_us):
-        x_r = (x_us/100.0) * cos(self.sensors_dict['servo'] + self.present_pose.theta)
-        y_r = (x_us/100.0) * sin(self.sensors_dict['servo'] + self.present_pose.theta)
+        x_r = (x_us / 100.0) * cos(self.sensors_dict['servo'] + self.present_pose.theta)
+        y_r = (x_us / 100.0) * sin(self.sensors_dict['servo'] + self.present_pose.theta)
 
         return x_r, y_r
 
