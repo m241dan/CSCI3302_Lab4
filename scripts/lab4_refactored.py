@@ -6,11 +6,11 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 
-from geometry_msgs.msg import Pose2D, TransformStamped, PoseStamped
+from geometry_msgs.msg import Pose2D, TransformStamped, PoseStamped, Point32
 from sensor_msgs.msg import PointCloud, ChannelFloat32
 from std_msgs.msg import Float32MultiArray, Empty, String, Int16
 from tf.transformations import quaternion_from_euler
-from math import floor, cos, sin
+from math import cos, sin, trunc
 from angles import normalize_angle
 import tf2_ros
 
@@ -18,9 +18,6 @@ class SparkiController(object):
     IR_THRESHOLD = 300
 
     def __init__(self):
-        # Sparki's Map
-        # self.map = SparkiMap(0.01, 0.01, .42, .60)
-
         # ROS Publishers
         self.motor_pub = rospy.Publisher('/sparki/motor_command', Float32MultiArray, queue_size=10)
         self.ping_pub = rospy.Publisher('/sparki/ping_command', Empty, queue_size=10)
@@ -28,8 +25,9 @@ class SparkiController(object):
         self.servo_pub = rospy.Publisher('/sparki/set_servo', Int16, queue_size=10)
         self.render_pub = rospy.Publisher('/sparki/render_sim', Empty, queue_size=10)
         self.pose_pub = rospy.Publisher('/sparki/transform', TransformStamped, queue_size=10)
-        self.obstacle_pub = rospy.Publisher('/obstacle/transform', TransformStamped, queue_size=10)
+        self.obstacle_pc_pub = rospy.Publisher('/obstacle/pc', PointCloud, queue_size=10)
         self.obstacle_pose = rospy.Publisher('/obstacle/pose', PoseStamped, queue_size=10)
+
         # ROS Subscribers
         self.odom_sub = rospy.Subscriber('/sparki/odometry', Pose2D, self.update_odom_cb)
         self.state_sub = rospy.Subscriber('/sparki/state', String, self.update_state_cb)
@@ -44,6 +42,9 @@ class SparkiController(object):
         self.broadcaster = tf2_ros.TransformBroadcaster()
         self.buffer = tf2_ros.Buffer()
         self.listener = tf2_ros.TransformListener(self.buffer)
+
+        self.world_map = np.zeros(shape=(200, 200))
+        self.pc = PointCloud()
 
     def update_odom_cb(self, msg):
         """
@@ -110,23 +111,22 @@ class SparkiController(object):
         obstacle.transform.translation.x = x_us * cos(np.deg2rad(self.sensors_dict["servo"]))
         obstacle.transform.translation.y = x_us * sin(np.deg2rad(self.sensors_dict["servo"]))
         obstacle.transform.rotation.w = 1
-        self.obstacle_pub.publish(obstacle)
         self.broadcaster.sendTransform(obstacle)
 
         try:
             trans = self.buffer.lookup_transform("map", "obstacle", rospy.Time())
-            pose = PoseStamped()
-            pose.header = trans.header
-            pose.pose.position.x = trans.transform.translation.x
-            pose.pose.position.y = trans.transform.translation.y
-            pose.pose.position.z = trans.transform.translation.z
-            self.obstacle_pose.publish(pose)
+            x = trunc(trans.transform.translation.x * 100)
+            y = trunc(trans.transform.translation.y * 100)
+            if self.world_map[x][y] != 1:
+                self.world_map[x][y] = 1
+                self.pc.header.stamp = rospy.Time.now()
+                self.pc.header.frame_id = "map"
+
+                self.pc.points.append(Point32(x/100.0, y/100.0, 0))
+                self.pc.channels.append(ChannelFloat32())
+                self.obstacle_pc_pub.publish(self.pc)
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             return
-
-
-
-        # self.map.add_obstacle(x_w, y_w)
 
     def us_to_world(self, x_us):
         x_r = x_us * cos(np.deg2rad(self.sensors_dict['servo']))
