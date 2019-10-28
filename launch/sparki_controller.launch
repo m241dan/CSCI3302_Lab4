@@ -1,5 +1,5 @@
 <launch>
-    <arg name="comm_port" default="/dev/ttyACM0"/>
-    <node pkg="lab4" type="sparki-ros.py" name="sparki_ros" args="$(arg comm_port)"/>
+<!--    <arg name="comm_port" default="/dev/ttyACM0"/>-->
+    <node pkg="lab4" type="sparki-simulator.py" name="sparki_simluator_sparki"/>
     <node pkg="lab4" type="lab4_refactored.py" name="sparki_controller" />
 </launch>
