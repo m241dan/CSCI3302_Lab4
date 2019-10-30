@@ -135,11 +135,36 @@ class SparkiController(object):
         y_w = x_r * sin(self.present_pose.theta) + y_r * cos(self.present_pose.theta) + self.present_pose.y
         return x_w, y_w
 
+    def cell_to_integer_thing_for_part_4_question_1_a_function(self, x, y):
+    	return y*200 + x + 1
+
+    def integer_to_cell_thing_for_part_4_question_1_a_function(self, cell):
+    	y = cell // 200
+    	cell -= (y*200)
+    	x = cell 
+    	return (x, y)
+
     def cost(self, cell_index_from, cell_index_to):
-        pass
+    	if cell_index_to == cell_index_from: #Same cell, no cost
+    		return 0
+    	if not np.abs(cell_index_from - cell_index_to) == 1: #They are not adjacent
+    		return 69420
+
+    	pos_1   = self.integer_to_cell_thing_for_part_4_question_1_a_function(cell_index_from - 1)
+    	pos_2   = self.integer_to_cell_thing_for_part_4_question_1_a_function(cell_index_to - 1)
+    	start_x = pos_1[0]
+    	start_y = pos_1[1]
+    	end_x   = pos_2[0]
+    	end_y   = pos_2[1]
+
+    	if self.world_map[end_x, end_y] == 1 or self.world_map[start_x, start_y] == 1: #Destination cell is occupied
+    		return 69420
+    	else:
+    		return 0
 
 
 if __name__ == "__main__":
     rospy.init_node('Sparki_Controller', anonymous=True)
     controller = SparkiController()
     rospy.spin()
+    print(controller.cost(204, 202))
